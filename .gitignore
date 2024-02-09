@@ -1,1 +1,9 @@
 .idea
+.vscode
+.zed
+defacto.iml
+alembic.ini
+__pycache__
+*.py[cod]
+*$py.class
+venv
