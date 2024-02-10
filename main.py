@@ -1,7 +1,9 @@
+import json
+
 from fastapi import FastAPI
+from sentence_transformers import SentenceTransformer
 from app.api.v1.endpoints import vector_operations
 from app.db.base import Base
-from app.db.session import engine
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 
@@ -17,11 +19,6 @@ app.include_router(
     prefix="/api/v1",
     tags=["vector-operations"]
 )
-
-
-@app.on_event("startup")
-async def startup_event():
-    await create_tables(engine)
 
 
 if __name__ == "__main__":

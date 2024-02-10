@@ -8,3 +8,5 @@ sentence-transformers
 pydantic~=2.6.1
 alembic~=1.13.1
 pydantic-settings
+
+pgvector~=0.2.5

@@ -1,6 +1,4 @@
-# app/crud/crud_vector.py
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.future import select
 from app.models.models import JobVector
 from app.schemas.schemas import JobVectorCreate
 
