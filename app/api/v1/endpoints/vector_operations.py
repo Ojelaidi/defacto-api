@@ -7,44 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.schemas import SearchRequest
 from app.api.v1.dependencies.database import get_db
 from typing import List, Dict, Any
-from app.services.vector_service import texts_to_vectors
 from app.services.indexer_service import index_documents_from_json
 from sqlalchemy import text
 import json
-from app.services.model_service import texts_to_vectors
+from app.services.model_service import texts_to_vectors, get_camembert_embeddings
 from sqlalchemy.future import select
+from sqlalchemy import update
 
 router = APIRouter()
-
-
-@router.post("/vectorize_batch/", response_model=Dict[str, Any])
-async def vectorize_batch(text_list: TextList):
-    try:
-        vectors = texts_to_vectors(text_list.texts)
-        return {"vectors": vectors}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to vectorize texts: {str(e)}")
-
-
-@router.post("/search-l2/", response_model=List[SearchResult])
-async def searchl2(search_request: SearchRequest, db: AsyncSession = Depends(get_db)):
-    if not search_request.query_text:
-        raise HTTPException(status_code=400, detail="Query text is required.")
-
-    query_vector = texts_to_vectors([search_request.query_text])[0]
-
-    sql_query = text("""
-        SELECT job_title, 
-               vector <-> :query_vector AS similarity 
-        FROM job_vector 
-        ORDER BY similarity ASC 
-        LIMIT 10;
-    """)
-
-    result = await db.execute(sql_query, {"query_vector": str(query_vector)})
-    job_titles = result.fetchall()
-
-    return [{"job_title": job.job_title, "similarity": job.similarity} for job in job_titles]
 
 @router.post("/index/vectorjobs")
 async def index_vector_jobs():
@@ -52,49 +22,6 @@ async def index_vector_jobs():
     index_name = 'vector-jobs-read'
     index_documents_from_json(json_file_path, index_name)
     return {"message": "Indexing..", "status": 200}
-
-@router.post("/search-inner/", response_model=List[SearchResult])
-async def searchinner(search_request: SearchRequest, db: AsyncSession = Depends(get_db)):
-    if not search_request.query_text:
-        raise HTTPException(status_code=400, detail="Query text is required.")
-
-    query_vector = texts_to_vectors([search_request.query_text])[0]
-
-    sql_query = text("""
-        SELECT job_title, 
-               (vector <#> :query_vector) * -1 AS similarity 
-        FROM job_vector 
-        ORDER BY similarity DESC 
-        LIMIT 10;
-    """)
-
-    result = await db.execute(sql_query, {"query_vector": str(query_vector)})
-    job_titles = result.fetchall()
-
-    return [{"job_title": job.job_title, "similarity": job.similarity} for job in job_titles]
-
-
-@router.post("/search-cosine/", response_model=List[SearchResult])
-async def searchcos(search_request: SearchRequest, db: AsyncSession = Depends(get_db)):
-    if not search_request.query_text:
-        raise HTTPException(status_code=400, detail="Query text is required.")
-
-    query_vector = texts_to_vectors([search_request.query_text])[0]
-
-    sql_query = text("""
-        SELECT job_title, 
-               1 - (vector <=> :query_vector) AS similarity 
-        FROM job_vector 
-        ORDER BY similarity DESC
-        LIMIT 10;
-    """)
-
-    result = await db.execute(sql_query, {"query_vector": str(query_vector)})
-    job_titles = result.fetchall()
-
-    return [{"job_title": job.job_title, "similarity": job.similarity} for job in job_titles]
-
-
 @router.get("/vectorize_and_store_seo", response_model=Dict[str, str])
 async def vectorize_and_store_seo(db: AsyncSession = Depends(get_db)):
     try:
@@ -144,3 +71,153 @@ async def vectorize_and_store_rome(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         await db.rollback()
         raise HTTPException(status_code=500, detail=f"Error during vector storage: {str(e)}")
+
+@router.post("/populate-camembert-embeddings/")
+async def populate_camembert_embeddings(db: AsyncSession = Depends(get_db)):
+    async with db.begin():
+        query = select(JobVector)
+        result = await db.execute(query)
+        job_vectors = result.scalars().all()
+
+        for job_vector in job_vectors:
+            if job_vector.job_title_camembert_embedding is None:
+                embeddings = get_camembert_embeddings([job_vector.job_title])
+                flattened_embeddings = embeddings.flatten().tolist()
+                update_stmt = update(JobVector).where(JobVector.id == job_vector.id).values(job_title_camembert_embedding=flattened_embeddings)
+                await db.execute(update_stmt)
+
+        await db.commit()
+    return {"message": "CamemBERT embeddings populated successfully."}
+@router.post("/vectorize_batch/", response_model=Dict[str, Any])
+async def vectorize_batch(text_list: TextList):
+    try:
+        vectors = texts_to_vectors(text_list.texts)
+        return {"vectors": vectors}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to vectorize texts: {str(e)}")
+
+
+@router.post("/classify-l12-l2/", response_model=List[SearchResult])
+async def classifyl12l2(search_request: SearchRequest, db: AsyncSession = Depends(get_db)):
+    if not search_request.query_text:
+        raise HTTPException(status_code=400, detail="Query text is required.")
+
+    query_vector = texts_to_vectors([search_request.query_text])[0]
+
+    sql_query = text("""
+        SELECT job_title, 
+               job_title_l12_embedding <-> :query_vector AS similarity 
+        FROM job_vector 
+        ORDER BY similarity ASC 
+        LIMIT 10;
+    """)
+
+    result = await db.execute(sql_query, {"query_vector": str(query_vector)})
+    job_titles = result.fetchall()
+
+    return [{"job_title": job.job_title, "similarity": job.similarity} for job in job_titles]
+
+
+
+@router.post("/classify-l12-inner/", response_model=List[SearchResult])
+async def classifyl12inner(search_request: SearchRequest, db: AsyncSession = Depends(get_db)):
+    if not search_request.query_text:
+        raise HTTPException(status_code=400, detail="Query text is required.")
+
+    query_vector = texts_to_vectors([search_request.query_text])[0]
+
+    sql_query = text("""
+        SELECT job_title, 
+               (job_title_l12_embedding <#> :query_vector) * -1 AS similarity 
+        FROM job_vector 
+        ORDER BY similarity DESC 
+        LIMIT 10;
+    """)
+
+    result = await db.execute(sql_query, {"query_vector": str(query_vector)})
+    job_titles = result.fetchall()
+
+    return [{"job_title": job.job_title, "similarity": job.similarity} for job in job_titles]
+
+
+@router.post("/classify-l12-cosine/", response_model=List[SearchResult])
+async def classifyl12cos(search_request: SearchRequest, db: AsyncSession = Depends(get_db)):
+    if not search_request.query_text:
+        raise HTTPException(status_code=400, detail="Query text is required.")
+
+    query_vector = texts_to_vectors([search_request.query_text])[0]
+
+    sql_query = text("""
+        SELECT job_title, 
+               1 - (job_title_l12_embedding <=> :query_vector) AS similarity 
+        FROM job_vector 
+        ORDER BY similarity DESC
+        LIMIT 10;
+    """)
+
+    result = await db.execute(sql_query, {"query_vector": str(query_vector)})
+    job_titles = result.fetchall()
+
+    return [{"job_title": job.job_title, "similarity": job.similarity} for job in job_titles]
+@router.post("/classify-camembert-l2/", response_model=List[SearchResult])
+async def classifycamembertl2(search_request: SearchRequest, db: AsyncSession = Depends(get_db)):
+    if not search_request.query_text:
+        raise HTTPException(status_code=400, detail="Query text is required.")
+
+    query_vector = get_camembert_embeddings([search_request.query_text])
+
+    sql_query = text("""
+        SELECT job_title, 
+               job_title_camembert_embedding <-> :query_vector AS similarity 
+        FROM job_vector 
+        ORDER BY similarity ASC 
+        LIMIT 10;
+    """)
+
+    result = await db.execute(sql_query, {"query_vector": str(query_vector.flatten().tolist())})
+    job_titles = result.fetchall()
+
+    return [{"job_title": job.job_title, "similarity": job.similarity} for job in job_titles]
+
+
+
+@router.post("/classify-camembert-inner/", response_model=List[SearchResult])
+async def classifycamembertinner(search_request: SearchRequest, db: AsyncSession = Depends(get_db)):
+    if not search_request.query_text:
+        raise HTTPException(status_code=400, detail="Query text is required.")
+
+    query_vector = get_camembert_embeddings([search_request.query_text])[0]
+
+    sql_query = text("""
+        SELECT job_title, 
+               (job_title_camembert_embedding <#> :query_vector) * -1 AS similarity 
+        FROM job_vector 
+        ORDER BY similarity DESC 
+        LIMIT 10;
+    """)
+
+    result = await db.execute(sql_query, {"query_vector": str(query_vector.flatten().tolist())})
+    job_titles = result.fetchall()
+
+    return [{"job_title": job.job_title, "similarity": job.similarity} for job in job_titles]
+
+
+@router.post("/classify-camembert-cosine/", response_model=List[SearchResult])
+async def classifycamembertcos(search_request: SearchRequest, db: AsyncSession = Depends(get_db)):
+    if not search_request.query_text:
+        raise HTTPException(status_code=400, detail="Query text is required.")
+
+    query_vector = get_camembert_embeddings([search_request.query_text])[0]
+
+    sql_query = text("""
+        SELECT job_title, 
+               1 - (job_title_camembert_embedding <=> :query_vector) AS similarity 
+        FROM job_vector 
+        ORDER BY similarity DESC
+        LIMIT 10;
+    """)
+
+    result = await db.execute(sql_query, {"query_vector": str(query_vector.flatten().tolist())})
+    job_titles = result.fetchall()
+
+    return [{"job_title": job.job_title, "similarity": job.similarity} for job in job_titles]

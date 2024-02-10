@@ -10,4 +10,5 @@ class JobVector(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     job_title = Column(String, unique=False)
-    vector = mapped_column(Vector(384))
+    job_title_l12_embedding = mapped_column(Vector(384))
+    job_title_camembert_embedding = mapped_column(Vector(768))
