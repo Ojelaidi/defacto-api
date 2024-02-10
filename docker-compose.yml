@@ -1,0 +1,39 @@
+version: '3.8'
+services:
+  db:
+    hostname: db
+    image: ankane/pgvector
+    ports:
+      - 5432:5432
+    restart: always
+    environment:
+      - POSTGRES_DB=vectordb
+      - POSTGRES_USER=testuser
+      - POSTGRES_PASSWORD=testpwd
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - defacto-network
+  opensearch:
+    ports:
+      - 9200:9200
+      - 9600:9600
+    environment:
+      - discovery.type=single-node
+    image: opensearchproject/opensearch:latest
+    networks:
+      - defacto-network
+  opensearch-dashboards:
+    image: opensearchproject/opensearch-dashboards:latest # Make sure the version of opensearch-dashboards matches the version of opensearch installed on other nodes
+    container_name: opensearch-dashboards
+    ports:
+      - 5601:5601 # Map host port 5601 to container port 5601
+    expose:
+      - "5601" # Expose port 5601 for web access to OpenSearch Dashboards
+    environment:
+      OPENSEARCH_HOSTS: '["https://opensearch:9200"]' # Define the OpenSearch nodes that OpenSearch Dashboards will query
+    networks:
+      - defacto-network
+networks:
+  defacto-network:

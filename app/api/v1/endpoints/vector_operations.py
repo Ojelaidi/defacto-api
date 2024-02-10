@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.schemas.schemas import SearchRequest
 from app.api.v1.dependencies.database import get_db
 from typing import List, Dict, Any
+from app.services.vector_service import texts_to_vectors
+from app.services.indexer_service import index_documents_from_json
 from sqlalchemy import text
 import json
 from app.services.model_service import texts_to_vectors
@@ -44,6 +46,12 @@ async def searchl2(search_request: SearchRequest, db: AsyncSession = Depends(get
 
     return [{"job_title": job.job_title, "similarity": job.similarity} for job in job_titles]
 
+@router.post("/index/vectorjobs")
+async def index_vector_jobs():
+    json_file_path = 'resources/job_vectors.json'
+    index_name = 'vector-jobs-read'
+    index_documents_from_json(json_file_path, index_name)
+    return {"message": "Indexing..", "status": 200}
 
 @router.post("/search-inner/", response_model=List[SearchResult])
 async def searchinner(search_request: SearchRequest, db: AsyncSession = Depends(get_db)):
