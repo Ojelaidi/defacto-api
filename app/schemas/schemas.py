@@ -11,13 +11,6 @@ class JobVectorCreate(JobVectorBase):
     pass
 
 
-class JobVector(JobVectorBase):
-    id: int
-
-    class Config:
-        from_attributes = True
-
-
 class TextList(BaseModel):
     texts: List[str]
 

@@ -52,3 +52,11 @@ transformers==4.37.2
 typing_extensions==4.9.0
 urllib3==2.2.0
 uvicorn==0.27.0.post1
+sqlalchemy~=2.0.25
+asyncpg
+httpx
+sentence-transformers
+pydantic~=2.6.1
+alembic~=1.13.1
+pydantic-settings
+pgvector~=0.2.5
