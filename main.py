@@ -1,7 +1,4 @@
-import json
-
 from fastapi import FastAPI
-from sentence_transformers import SentenceTransformer
 from app.api.v1.endpoints import vector_operations
 from app.db.base import Base
 from sqlalchemy.ext.asyncio import AsyncEngine
@@ -12,7 +9,7 @@ async def create_tables(engine: AsyncEngine):
         await conn.run_sync(Base.metadata.create_all)
 
 
-app = FastAPI(title="Vector Search API", version="1.0")
+app = FastAPI(title="Job Classifier API", version="1.0")
 
 app.include_router(
     vector_operations.router,
