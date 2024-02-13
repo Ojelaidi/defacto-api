@@ -22,3 +22,9 @@ class SearchRequest(BaseModel):
 class SearchResult(BaseModel):
     job_title: str
     similarity: float
+
+
+class SeoSearchResult(BaseModel):
+    job_title: str
+    code_rome: str
+    similarity: float
