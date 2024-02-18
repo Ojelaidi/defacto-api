@@ -22,6 +22,8 @@ services:
     environment:
       - discovery.type=single-node
     image: opensearchproject/opensearch:latest
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
     networks:
       - defacto-network
   opensearch-dashboards:
@@ -37,3 +39,5 @@ services:
       - defacto-network
 networks:
   defacto-network:
+volumes:
+  opensearch-data:
